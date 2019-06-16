@@ -31,6 +31,12 @@ const int output1 = 1;
 const int output2 = 2;
 const int output3 = 3;
 
+// register relay
+const char* host = "192.168.1.105";
+const uint16_t port = 80;
+const char* url = "/relay_registration.php";
+unsigned long timeout_loop = 0;
+
 void setup() {
   Serial.begin(115200);
   // Initialize the output variables as outputs
@@ -62,6 +68,8 @@ void setup() {
 
 void loop(){
   WiFiClient client = server.available();   // Listen for incoming clients
+
+  registerRelay();
 
   if (client) {                             // If a new client connects,
     Serial.println("New Client.");          // print a message out in the serial port
@@ -206,4 +214,60 @@ void loop(){
     Serial.println("Client disconnected.");
     Serial.println("");
   }
+}
+
+/**
+ * send ping to registration relay every 60 seconds
+ */
+void registerRelay() {
+  if(timeout_loop == 0) {
+    timeout_loop = millis();
+  }
+
+  if (millis() - timeout_loop < 60000) {
+    return; // continue
+  }
+
+  timeout_loop = 0; // reset timer
+  
+  // Use WiFiClient class to create TCP connections
+  WiFiClient client;
+  if (!client.connect(host, port)) {
+    Serial.println("connection failed");
+    delay(5000);
+    return;
+  }
+
+  // This will send a string to the server
+  Serial.println("sending data to server");
+  if (client.connected()) {
+//    client.println("GET /relay_registration.php HTTP/1.1\r\nHost: "+"site.ru"+"\r\nConnection: close\r\n\r\n");
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" + 
+               "Connection: close\r\n\r\n");
+  }
+
+  // wait for data to be available
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 5000) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      delay(6000);
+      return;
+    }
+  }
+
+  // Read all the lines of the reply from server and print them to Serial
+  Serial.println("receiving from remote server");
+  // not testing 'client.connected()' since we do not need to send data here
+  while (client.available()) {
+    char ch = static_cast<char>(client.read());
+    Serial.print(ch);
+  }
+
+  // Close the connection
+  Serial.println();
+  Serial.println("closing connection");
+  client.stop();
 }
